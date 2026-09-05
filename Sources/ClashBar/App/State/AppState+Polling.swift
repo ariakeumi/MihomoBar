@@ -111,7 +111,7 @@ extension AppState {
         }
     }
 
-    private func desiredDataAcquisitionPolicy(
+    func desiredDataAcquisitionPolicy(
         panelPresented: Bool,
         activeTab: RootTab) -> DataAcquisitionPolicy
     {
@@ -275,6 +275,7 @@ extension AppState {
         self.providerNodeTesting.removeAll(keepingCapacity: false)
         self.providerBatchTesting.removeAll(keepingCapacity: false)
         self.providerUpdating.removeAll(keepingCapacity: false)
+        self.ruleProviderUpdating.removeAll(keepingCapacity: false)
         self.ruleProviders.removeAll(keepingCapacity: false)
         self.ruleItems.removeAll(keepingCapacity: false)
     }

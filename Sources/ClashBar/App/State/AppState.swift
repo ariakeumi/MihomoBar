@@ -87,6 +87,7 @@ final class RemoteAppState: ObservableObject {
     @Published var providerNodeTesting: Set<ProviderNodeKey> = []
     @Published var providerBatchTesting: Set<String> = []
     @Published var providerUpdating: Set<String> = []
+    @Published var ruleProviderUpdating: Set<String> = []
     @Published var ruleProviders: [String: ProviderDetail] = [:]
     @Published var ruleItems: [RuleItem] = []
     @Published var isRuleProvidersRefreshing: Bool = false
@@ -303,10 +304,12 @@ final class RemoteAppState: ObservableObject {
     var settingsFeedbackClearTask: Task<Void, Never>?
     var providerRefreshTask: Task<Void, Never>?
     var trafficDecodeTask: Task<Void, Never>?
+    var trafficWatchdogTask: Task<Void, Never>?
     var mihomoLogFlushTask: Task<Void, Never>?
     var providerRefreshGeneration: Int = 0
     var lastTrafficSampleAt: Date?
     var lastTrafficDecodeAt: Date = .distantPast
+    var lastTrafficPayloadReceivedAt: Date?
     var pendingTrafficPayload: Data?
     var pendingMihomoLogs: [AppErrorLogEntry] = []
     var modeSwitchInFlight = false
@@ -335,6 +338,8 @@ final class RemoteAppState: ObservableObject {
     let foregroundLowFrequencyPrimaryTabsIntervalNanoseconds: UInt64 = 20_000_000_000
     let foregroundLowFrequencyOtherTabsIntervalNanoseconds: UInt64 = 45_000_000_000
     let trafficPublishIntervalNanoseconds: UInt64 = 500_000_000
+    let trafficWatchdogIntervalNanoseconds: UInt64 = 2_000_000_000
+    let trafficStallTimeout: TimeInterval = 6
     let openWrtTrafficPollIntervalNanoseconds: UInt64 = 1_000_000_000
     let streamDisconnectLogThrottleInterval: TimeInterval = 2
     let streamReconnectBaseDelayNanoseconds: UInt64 = 1_000_000_000
@@ -413,6 +418,7 @@ final class RemoteAppState: ObservableObject {
 
     deinit {
         self.trafficDecodeTask?.cancel()
+        self.trafficWatchdogTask?.cancel()
         self.mihomoLogFlushTask?.cancel()
         self.mediumFrequencyTask?.cancel()
         self.lowFrequencyTask?.cancel()

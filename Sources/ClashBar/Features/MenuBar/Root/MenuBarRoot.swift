@@ -138,6 +138,7 @@ struct MenuBarRoot: View {
     @State var topHeaderHeight: CGFloat = 0
     @State var modeAndTabSectionHeight: CGFloat = 0
     @State var tabContentHeights: [RootTab: CGFloat] = [:]
+    @State var visibleTabContentHeights: [RootTab: CGFloat] = [:]
     @AppStorage("clashbar.proxy.group.hide_hidden") var hideHiddenProxyGroups: Bool = true
 
     var contentWidth: CGFloat {
@@ -183,6 +184,9 @@ struct MenuBarRoot: View {
         .frame(width: MenuBarLayoutTokens.panelWidth, height: resolvedPanelHeight)
         .background(self.panelBackground)
         .clipShape(RoundedRectangle(cornerRadius: MenuBarLayoutTokens.panelCornerRadius, style: .continuous))
+        .overlay(alignment: .topLeading) {
+            self.tabMeasurementContent(for: self.currentTab)
+        }
         .onAppear {
             let restoredTab = self.appState.activeMenuTab
             if self.currentTab != restoredTab {
@@ -236,6 +240,17 @@ struct MenuBarRoot: View {
             .padding(.top, self.tabContentTopInset)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .reportHeight { updateVisibleTabContentHeight($0, for: tab) }
+    }
+
+    func tabMeasurementContent(for tab: RootTab) -> some View {
+        self.tabBody(for: tab)
+            .padding(.top, self.tabContentTopInset)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(width: self.contentWidth, alignment: .leading)
+            .hidden()
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
             .reportHeight { updateTabContentHeight($0, for: tab) }
     }
 

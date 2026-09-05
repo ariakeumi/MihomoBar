@@ -1,5 +1,10 @@
 import SwiftUI
 
+struct RuleProviderLookupEntry {
+    let key: String
+    let detail: ProviderDetail
+}
+
 extension MenuBarRoot {
     var rulesTabBody: some View {
         let visibleRules = Array(appState.ruleItems.prefix(100))
@@ -97,7 +102,7 @@ extension MenuBarRoot {
         .opacity(appState.isRuleProvidersRefreshing ? 0.6 : 1)
     }
 
-    func rulesRow(rule: RuleItem, index: Int, providerLookup: [String: ProviderDetail]) -> some View {
+    func rulesRow(rule: RuleItem, index: Int, providerLookup: [String: RuleProviderLookupEntry]) -> some View {
         let hovered = hoveredRuleIndex == index
         let typeText = (rule.type.trimmedNonEmpty ?? tr("ui.common.na")).uppercased()
         let targetText = rule.payload.trimmedNonEmpty ?? tr("ui.common.na")
@@ -145,15 +150,27 @@ extension MenuBarRoot {
                     .fill(badge.background))
             .frame(width: 90, alignment: .leading)
 
-            VStack(alignment: .trailing, spacing: 1.5) {
-                Text("\(stats.count)")
-                    .font(.appMonospaced(size: 12, weight: .regular))
-                    .foregroundStyle(stats.hasProvider ? nativeSecondaryLabel : nativeTertiaryLabel)
-                if let updatedText = stats.updatedText {
-                    Text(updatedText)
-                        .font(.appSystem(size: 10, weight: .regular))
-                        .foregroundStyle(nativeTertiaryLabel)
-                        .lineLimit(1)
+            HStack(spacing: MenuBarLayoutTokens.hDense) {
+                VStack(alignment: .trailing, spacing: 1.5) {
+                    Text("\(stats.count)")
+                        .font(.appMonospaced(size: 12, weight: .regular))
+                        .foregroundStyle(stats.providerKey == nil ? nativeTertiaryLabel : nativeSecondaryLabel)
+                    if let updatedText = stats.updatedText {
+                        Text(updatedText)
+                            .font(.appSystem(size: 10, weight: .regular))
+                            .foregroundStyle(nativeTertiaryLabel)
+                            .lineLimit(1)
+                    }
+                }
+
+                if let providerKey = stats.providerKey {
+                    self.providerActionButton(
+                        .refresh,
+                        isLoading: appState.ruleProviderUpdating.contains(providerKey))
+                    {
+                        await appState.updateRuleProvider(name: providerKey)
+                    }
+                    .help(tr("ui.action.refresh"))
                 }
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
@@ -195,32 +212,33 @@ extension MenuBarRoot {
 
     func ruleStats(
         payload: String,
-        providerLookup: [String: ProviderDetail]) -> (count: Int, updatedText: String?, hasProvider: Bool)
+        providerLookup: [String: RuleProviderLookupEntry]) -> (count: Int, updatedText: String?, providerKey: String?)
     {
         let payloadTrimmed = payload.trimmed
         guard !payloadTrimmed.isEmpty, payloadTrimmed != tr("ui.common.na") else {
-            return (count: 0, updatedText: nil, hasProvider: false)
+            return (count: 0, updatedText: nil, providerKey: nil)
         }
 
         if let provider = providerLookup[payloadTrimmed.lowercased()] {
-            let count = max(0, provider.ruleCount ?? 0)
+            let count = max(0, provider.detail.ruleCount ?? 0)
             return (
                 count: count,
-                updatedText: ValueFormatter.relativeTime(from: provider.updatedAt, language: language),
-                hasProvider: true)
+                updatedText: ValueFormatter.relativeTime(from: provider.detail.updatedAt, language: language),
+                providerKey: provider.key)
         }
-        return (count: 0, updatedText: nil, hasProvider: false)
+        return (count: 0, updatedText: nil, providerKey: nil)
     }
 
-    func ruleProviderLookupMap() -> [String: ProviderDetail] {
-        var map: [String: ProviderDetail] = [:]
+    func ruleProviderLookupMap() -> [String: RuleProviderLookupEntry] {
+        var map: [String: RuleProviderLookupEntry] = [:]
         map.reserveCapacity(appState.ruleProviders.count * 2)
 
         for (key, detail) in appState.ruleProviders {
-            map[key.lowercased()] = detail
+            let entry = RuleProviderLookupEntry(key: key, detail: detail)
+            map[key.lowercased()] = entry
 
             if let name = detail.name.trimmedNonEmpty {
-                map[name.lowercased()] = detail
+                map[name.lowercased()] = entry
             }
         }
         return map

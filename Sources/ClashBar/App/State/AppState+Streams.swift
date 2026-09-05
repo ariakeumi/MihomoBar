@@ -72,6 +72,7 @@ extension AppState {
         }
         if kind == .traffic {
             self.resetPendingTrafficSnapshotState()
+            self.stopTrafficWatchdog()
         }
         if resetReconnectState {
             self.resetStreamReconnectState(for: kind)
@@ -148,9 +149,12 @@ extension AppState {
             makeWebSocket: { try $0.makeTrafficWebSocketTask() },
             onPayload: { [weak self] payload in
                 guard let self else { return }
+                self.lastTrafficPayloadReceivedAt = Date()
                 self.pendingTrafficPayload = payload
                 self.flushPendingTrafficSnapshotIfNeeded()
             })
+        self.lastTrafficPayloadReceivedAt = Date()
+        self.startTrafficWatchdog()
     }
 
     func flushPendingTrafficSnapshotIfNeeded(immediately: Bool = false) {
@@ -253,6 +257,43 @@ extension AppState {
         self.trafficDecodeTask = nil
         self.pendingTrafficPayload = nil
         self.lastTrafficDecodeAt = .distantPast
+        self.lastTrafficPayloadReceivedAt = nil
+    }
+
+    private func startTrafficWatchdog() {
+        self.trafficWatchdogTask?.cancel()
+        self.trafficWatchdogTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                do {
+                    try await Task.sleep(nanoseconds: self?.trafficWatchdogIntervalNanoseconds ?? 2_000_000_000)
+                } catch {
+                    return
+                }
+                guard let self, !Task.isCancelled else { return }
+                self.restartTrafficStreamIfStalled()
+            }
+        }
+    }
+
+    private func stopTrafficWatchdog() {
+        self.trafficWatchdogTask?.cancel()
+        self.trafficWatchdogTask = nil
+    }
+
+    private func restartTrafficStreamIfStalled() {
+        let policy = self.desiredDataAcquisitionPolicy(
+            panelPresented: self.isPanelPresented,
+            activeTab: self.activeMenuTab)
+        guard self.isRemoteSessionActive, policy.enableTrafficStream else {
+            self.stopTrafficWatchdog()
+            return
+        }
+        guard self.webSocketTask(for: .traffic) != nil else { return }
+
+        let lastPayloadAt = self.lastTrafficPayloadReceivedAt ?? .distantPast
+        guard Date().timeIntervalSince(lastPayloadAt) > self.trafficStallTimeout else { return }
+
+        self.startTrafficStream()
     }
 
     private func applyConnectionsSnapshot(_ snapshot: ConnectionsSnapshot) {

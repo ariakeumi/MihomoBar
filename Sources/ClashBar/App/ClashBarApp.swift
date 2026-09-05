@@ -34,27 +34,27 @@ struct ClashBarApp: App {
                 Button(self.tr("ui.tab.proxy")) {
                     self.appDelegate.appState.setActiveMenuTab(.proxy)
                 }
-                .keyboardShortcut("1", modifiers: [.command, .option])
+                .keyboardShortcut("1", modifiers: [.command])
 
                 Button(self.tr("ui.tab.rules")) {
                     self.appDelegate.appState.setActiveMenuTab(.rules)
                 }
-                .keyboardShortcut("2", modifiers: [.command, .option])
+                .keyboardShortcut("2", modifiers: [.command])
 
                 Button(self.tr("ui.tab.activity")) {
                     self.appDelegate.appState.setActiveMenuTab(.activity)
                 }
-                .keyboardShortcut("3", modifiers: [.command, .option])
+                .keyboardShortcut("3", modifiers: [.command])
 
                 Button(self.tr("ui.tab.logs")) {
                     self.appDelegate.appState.setActiveMenuTab(.logs)
                 }
-                .keyboardShortcut("4", modifiers: [.command, .option])
+                .keyboardShortcut("4", modifiers: [.command])
 
                 Button(self.tr("ui.tab.system")) {
                     self.appDelegate.appState.setActiveMenuTab(.system)
                 }
-                .keyboardShortcut("5", modifiers: [.command, .option])
+                .keyboardShortcut("5", modifiers: [.command])
             }
 
             CommandMenu("Actions") {

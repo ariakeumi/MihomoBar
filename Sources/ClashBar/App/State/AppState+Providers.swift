@@ -16,6 +16,10 @@ extension AppState {
     }
 
     func updateRuleProvider(name: String) async {
+        guard !ruleProviderUpdating.contains(name) else { return }
+        ruleProviderUpdating.insert(name)
+        defer { ruleProviderUpdating.remove(name) }
+
         await self.runSingleProviderUpdate(
             actionName: tr("log.action_name.update_rule_provider", name),
             request: .updateRuleProvider(name: name))
@@ -376,6 +380,9 @@ extension AppState {
             self.providerUpdating = self.providerUpdating.intersection(currentNames)
             self.providerNodeLatencies = self.providerNodeLatencies.filter { currentNames.contains($0.key) }
             self.providerNodeTesting = Set(self.providerNodeTesting.filter { currentNames.contains($0.provider) })
+
+            let currentRuleNames = Set(ruleProviders.providers.keys)
+            self.ruleProviderUpdating = self.ruleProviderUpdating.intersection(currentRuleNames)
         }
     }
 

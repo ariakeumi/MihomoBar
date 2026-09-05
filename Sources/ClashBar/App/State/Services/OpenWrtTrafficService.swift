@@ -11,6 +11,7 @@ enum OpenWrtTrafficServiceError: LocalizedError {
     case invalidEndpoint
     case invalidResponse
     case httpStatus(Int, String)
+    case permissionDenied(String)
     case rpcError(String)
     case missingSessionID
     case missingStatistics
@@ -23,12 +24,23 @@ enum OpenWrtTrafficServiceError: LocalizedError {
             "OpenWrt returned an invalid response"
         case let .httpStatus(code, message):
             "OpenWrt request failed (\(code)): \(message)"
+        case let .permissionDenied(message):
+            "OpenWrt RPC failed: \(message)"
         case let .rpcError(message):
             "OpenWrt RPC failed: \(message)"
         case .missingSessionID:
             "OpenWrt login did not return a session id"
         case .missingStatistics:
             "OpenWrt interface statistics are missing"
+        }
+    }
+
+    var shouldRefreshSession: Bool {
+        switch self {
+        case .permissionDenied:
+            true
+        default:
+            false
         }
     }
 }
@@ -107,6 +119,16 @@ actor OpenWrtTrafficService {
     }
 
     private func fetchInterfaceCounters(configuration: OpenWrtTrafficConfiguration) async throws -> InterfaceCounters {
+        let hadCachedSession = self.sessionState != nil
+        do {
+            return try await self.fetchInterfaceCountersOnce(configuration: configuration)
+        } catch let error as OpenWrtTrafficServiceError where hadCachedSession && error.shouldRefreshSession {
+            self.sessionState = nil
+            return try await self.fetchInterfaceCountersOnce(configuration: configuration)
+        }
+    }
+
+    private func fetchInterfaceCountersOnce(configuration: OpenWrtTrafficConfiguration) async throws -> InterfaceCounters {
         let sessionID = try await self.sessionID(configuration: configuration)
         if let counters = try await self.fetchInterfaceCountersViaNetworkDevice(
             configuration: configuration,
@@ -179,7 +201,7 @@ actor OpenWrtTrafficService {
             return nil
         } catch let error as OpenWrtTrafficServiceError {
             switch error {
-            case .rpcError, .missingStatistics:
+            case .permissionDenied, .rpcError, .missingStatistics:
                 return nil
             default:
                 throw error
@@ -252,7 +274,7 @@ actor OpenWrtTrafficService {
         }
 
         if let error = json["error"] as? [String: Any] {
-            throw OpenWrtTrafficServiceError.rpcError(self.rpcErrorDescription(from: error))
+            throw self.rpcError(from: error)
         }
 
         guard let result = json["result"] as? [Any],
@@ -262,8 +284,11 @@ actor OpenWrtTrafficService {
         }
 
         if status != 0 {
-            if status == 6, object != "session" {
-                self.sessionState = nil
+            if status == 6 {
+                let message = result.count > 1
+                    ? String(describing: result[1])
+                    : self.rpcStatusDescription(status)
+                throw OpenWrtTrafficServiceError.permissionDenied(message)
             }
             let message = result.count > 1 ? String(describing: result[1]) : self.rpcStatusDescription(status)
             throw OpenWrtTrafficServiceError.rpcError(message)
@@ -313,10 +338,14 @@ actor OpenWrtTrafficService {
         }
     }
 
-    private func rpcErrorDescription(from error: [String: Any]) -> String {
+    private func rpcError(from error: [String: Any]) -> OpenWrtTrafficServiceError {
         if let code = error["code"] as? Int, code == -32002 {
-            return "Permission denied (ubus HTTP ACL)"
+            return .permissionDenied("Permission denied (ubus HTTP ACL)")
         }
+        return .rpcError(self.rpcErrorDescription(from: error))
+    }
+
+    private func rpcErrorDescription(from error: [String: Any]) -> String {
         if let message = error["message"] as? String, !message.isEmpty {
             return message
         }

@@ -22,7 +22,7 @@ extension MenuBarRoot {
     }
 
     var hasMeasuredCurrentTabContent: Bool {
-        tabContentHeights[currentTab] != nil
+        tabContentHeights[currentTab] != nil || visibleTabContentHeights[currentTab] != nil
     }
 
     var hasMeasuredLayoutForCurrentTab: Bool {
@@ -34,11 +34,41 @@ extension MenuBarRoot {
     }
 
     var measuredTabContentHeight: CGFloat {
-        max(1, tabContentHeights[currentTab] ?? self.unresolvedTabScrollAreaHeight)
+        let hiddenMeasured = tabContentHeights[currentTab]
+        let visibleMeasured = visibleTabContentHeights[currentTab]
+        let estimated = self.estimatedContentHeightForCurrentTab
+
+        if let visibleMeasured, visibleMeasured > self.maxScrollableContentHeight + 0.5 {
+            return max(1, visibleMeasured, estimated)
+        }
+        if let hiddenMeasured {
+            return max(1, hiddenMeasured, estimated)
+        }
+        if let visibleMeasured {
+            return max(1, visibleMeasured, estimated)
+        }
+        return max(1, self.unresolvedTabScrollAreaHeight, estimated)
     }
 
     var fixedSectionHeight: CGFloat {
         topHeaderHeight + modeAndTabSectionHeight
+    }
+
+    var estimatedContentHeightForCurrentTab: CGFloat {
+        switch self.currentTab {
+        case .rules:
+            let visibleRules = min(appState.ruleItems.count, 100)
+            guard visibleRules > 0 else { return 0 }
+            let statsAndColumnHeader: CGFloat = 84
+            let rowHeight: CGFloat = 32
+            let separatorHeight = MenuBarLayoutTokens.hairline
+            return self.tabContentTopInset
+                + statsAndColumnHeader
+                + (CGFloat(visibleRules) * rowHeight)
+                + (CGFloat(max(0, visibleRules - 1)) * separatorHeight)
+        default:
+            return 0
+        }
     }
 
     var maxScrollableContentHeight: CGFloat {
@@ -82,6 +112,14 @@ extension MenuBarRoot {
         guard abs(existing - normalized) > 0.5 else { return }
 
         tabContentHeights[tab] = normalized
+    }
+
+    func updateVisibleTabContentHeight(_ measured: CGFloat, for tab: RootTab) {
+        let normalized = max(1, measured)
+        let existing = visibleTabContentHeights[tab] ?? 0
+        guard abs(existing - normalized) > 0.5 else { return }
+
+        visibleTabContentHeights[tab] = normalized
     }
 
     func publishPreferredPanelHeight() {
